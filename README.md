@@ -78,7 +78,7 @@ Visit **[dist-psi-dun-81.vercel.app](https://dist-psi-dun-81.vercel.app)** - no 
 ### Run Locally
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/golf-clash-auto-aim.git
+git clone https://github.com/carlos-rdz/golf-clash-auto-aim.git
 cd golf-clash-auto-aim
 npm install
 npm run dev
