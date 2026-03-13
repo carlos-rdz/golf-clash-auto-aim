@@ -7,69 +7,74 @@ const categorySelect = document.getElementById("club-category");
 const clubSelect = document.getElementById("club-name");
 const levelSelect = document.getElementById("club-level");
 const ballSelect = document.getElementById("ball");
-const windSlider = document.getElementById("wind-speed");
-const windNum = document.getElementById("wind-speed-num");
-const distSlider = document.getElementById("distance");
-const distLabel = document.getElementById("distance-label");
-const elevSlider = document.getElementById("elevation");
-const elevLabel = document.getElementById("elevation-label");
-const compassCanvas = document.getElementById("compass-canvas");
-const windAngleLabel = document.getElementById("wind-angle-label");
-
-// Result elements
+const windValueEl = document.getElementById("wind-value");
+const windMinusBtn = document.getElementById("wind-minus");
+const windPlusBtn = document.getElementById("wind-plus");
+const ringCanvas = document.getElementById("ring-canvas");
 const ringNumber = document.getElementById("ring-number");
 const ringDesc = document.getElementById("ring-description");
-const ringCanvas = document.getElementById("ring-canvas");
-const effectiveWindEl = document.getElementById("effective-wind");
-const windPerRingEl = document.getElementById("wind-per-ring");
-const clubAccuracyEl = document.getElementById("club-accuracy");
-const curlRecEl = document.getElementById("curl-rec");
-const adjustDirEl = document.getElementById("adjust-direction");
-const distMultEl = document.getElementById("dist-mult");
-const chartClubName = document.getElementById("chart-club-name");
+const answerInstruction = document.getElementById("answer-instruction");
+const directionText = document.getElementById("direction-text");
+const ringsText = document.getElementById("rings-text");
+const answerCurl = document.getElementById("answer-curl");
+const curlText = document.getElementById("curl-text");
 const windChartEl = document.getElementById("wind-chart");
 
-// ── State ──
-let windAngle = 0; // degrees, 0 = headwind
-let isDraggingCompass = false;
+// Hidden compatibility elements
+const windSpeedHidden = document.getElementById("wind-speed");
+const windSpeedNumHidden = document.getElementById("wind-speed-num");
+const distanceHidden = document.getElementById("distance");
+const elevationHidden = document.getElementById("elevation");
 
-// ── Init dropdowns ──
-function initDropdowns() {
-  // Categories
+// ── State ──
+let windSpeed = 5.0;
+let windAngle = 0;
+let distancePercent = 100;
+let elevationPercent = 0;
+
+// ── Init ──
+function init() {
+  // Populate all clubs (flat list, grouped by category)
+  CLUB_CATEGORIES.forEach((cat) => {
+    const group = document.createElement("optgroup");
+    group.label = cat;
+    Object.entries(CLUBS)
+      .filter(([, c]) => c.category === cat)
+      .forEach(([name]) => {
+        const opt = document.createElement("option");
+        opt.value = name;
+        opt.textContent = name;
+        group.appendChild(opt);
+      });
+    clubSelect.appendChild(group);
+  });
+
+  // Category select (hidden by default, for filtering)
   CLUB_CATEGORIES.forEach((cat) => {
     const opt = document.createElement("option");
     opt.value = cat;
     opt.textContent = cat;
     categorySelect.appendChild(opt);
   });
-  categorySelect.value = "Driver";
 
-  // Balls
-  Object.keys(BALLS).forEach((name) => {
+  // Balls - show friendly names, most common first
+  const commonBalls = ["Basic", "Marlin", "Navigator", "Quasar", "Titan", "Katana", "Kingmaker", "Berserker", "Luminaire"];
+  commonBalls.forEach((name) => {
+    if (!BALLS[name]) return;
+    const b = BALLS[name];
     const opt = document.createElement("option");
     opt.value = name;
-    opt.textContent = name;
+    opt.textContent = `${name} (Wind ${b.windResist}, Power ${b.power})`;
     ballSelect.appendChild(opt);
   });
   ballSelect.value = "Basic";
 
-  updateClubList();
-}
-
-function updateClubList() {
-  const cat = categorySelect.value;
-  clubSelect.innerHTML = "";
-
-  Object.entries(CLUBS)
-    .filter(([, c]) => c.category === cat)
-    .forEach(([name]) => {
-      const opt = document.createElement("option");
-      opt.value = name;
-      opt.textContent = name;
-      clubSelect.appendChild(opt);
-    });
-
+  // Default to a popular club
+  clubSelect.value = "The Sniper";
   updateLevelList();
+
+  // Load saved preferences
+  loadPreferences();
 }
 
 function updateLevelList() {
@@ -77,153 +82,162 @@ function updateLevelList() {
   if (!club) return;
 
   levelSelect.innerHTML = "";
-  for (let i = 1; i <= club.accuracy.length; i++) {
+  for (let i = club.accuracy.length; i >= 1; i--) {
     const opt = document.createElement("option");
     opt.value = i;
     opt.textContent = `Level ${i}`;
     levelSelect.appendChild(opt);
   }
-  // Default to max level
+  // Default to max
   levelSelect.value = club.accuracy.length;
 
   recalculate();
 }
 
-// ── Compass drawing & interaction ──
-function drawCompass() {
-  const ctx = compassCanvas.getContext("2d");
-  const cx = 70, cy = 70, r = 55;
+function updateClubListByCategory() {
+  const cat = categorySelect.value;
+  clubSelect.innerHTML = "";
 
-  ctx.clearRect(0, 0, 140, 140);
+  CLUB_CATEGORIES.forEach((c) => {
+    const group = document.createElement("optgroup");
+    group.label = c;
+    Object.entries(CLUBS)
+      .filter(([, club]) => club.category === c)
+      .forEach(([name]) => {
+        const opt = document.createElement("option");
+        opt.value = name;
+        opt.textContent = name;
+        group.appendChild(opt);
+      });
+    clubSelect.appendChild(group);
+  });
 
-  // Outer circle
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.strokeStyle = "#2a3a4a";
-  ctx.lineWidth = 2;
-  ctx.stroke();
+  // Select first club in the chosen category
+  const firstInCat = Object.entries(CLUBS).find(([, c]) => c.category === cat);
+  if (firstInCat) clubSelect.value = firstInCat[0];
 
-  // Cardinal labels
-  ctx.fillStyle = "#8899aa";
-  ctx.font = "11px sans-serif";
-  ctx.textAlign = "center";
-  ctx.fillText("HEAD", cx, 16);
-  ctx.fillText("TAIL", cx, 134);
-  ctx.textBaseline = "middle";
-  ctx.fillText("L", 10, cy);
-  ctx.fillText("R", 130, cy);
-
-  // Wind arrow
-  const angleRad = ((windAngle - 90) * Math.PI) / 180;
-  const ax = cx + Math.cos(angleRad) * (r - 10);
-  const ay = cy + Math.sin(angleRad) * (r - 10);
-
-  // Arrow line
-  ctx.beginPath();
-  ctx.moveTo(cx, cy);
-  ctx.lineTo(ax, ay);
-  ctx.strokeStyle = "#00d4aa";
-  ctx.lineWidth = 3;
-  ctx.stroke();
-
-  // Arrow head
-  const headLen = 10;
-  const ha1 = angleRad - 0.4;
-  const ha2 = angleRad + 0.4;
-  ctx.beginPath();
-  ctx.moveTo(ax, ay);
-  ctx.lineTo(ax - Math.cos(ha1) * headLen, ay - Math.sin(ha1) * headLen);
-  ctx.moveTo(ax, ay);
-  ctx.lineTo(ax - Math.cos(ha2) * headLen, ay - Math.sin(ha2) * headLen);
-  ctx.stroke();
-
-  // Center dot
-  ctx.beginPath();
-  ctx.arc(cx, cy, 4, 0, Math.PI * 2);
-  ctx.fillStyle = "#00d4aa";
-  ctx.fill();
+  updateLevelList();
 }
 
-function getWindAngleFromMouse(e) {
-  const rect = compassCanvas.getBoundingClientRect();
-  const x = e.clientX - rect.left - 70;
-  const y = e.clientY - rect.top - 70;
-  let angle = (Math.atan2(y, x) * 180) / Math.PI + 90;
-  if (angle < 0) angle += 360;
-  return Math.round(angle);
-}
-
-function getWindLabel(angle) {
-  if (angle <= 10 || angle >= 350) return "Headwind";
-  if (angle >= 170 && angle <= 190) return "Tailwind";
-  if (angle > 10 && angle < 80) return "Head-Right";
-  if (angle >= 80 && angle <= 100) return "Right Crosswind";
-  if (angle > 100 && angle < 170) return "Tail-Right";
-  if (angle > 190 && angle < 260) return "Tail-Left";
-  if (angle >= 260 && angle <= 280) return "Left Crosswind";
-  return "Head-Left";
-}
-
-compassCanvas.addEventListener("mousedown", (e) => {
-  isDraggingCompass = true;
-  windAngle = getWindAngleFromMouse(e);
-  drawCompass();
-  windAngleLabel.textContent = `${windAngle}° (${getWindLabel(windAngle)})`;
+// ── Wind controls ──
+function updateWindDisplay() {
+  windValueEl.textContent = windSpeed.toFixed(1);
+  windSpeedHidden.value = windSpeed;
+  windSpeedNumHidden.value = windSpeed;
   recalculate();
+}
+
+windMinusBtn.addEventListener("click", () => {
+  windSpeed = Math.max(0, windSpeed - 0.5);
+  updateWindDisplay();
 });
 
-window.addEventListener("mousemove", (e) => {
-  if (!isDraggingCompass) return;
-  windAngle = getWindAngleFromMouse(e);
-  drawCompass();
-  windAngleLabel.textContent = `${windAngle}° (${getWindLabel(windAngle)})`;
-  recalculate();
+windPlusBtn.addEventListener("click", () => {
+  windSpeed = Math.min(15, windSpeed + 0.5);
+  updateWindDisplay();
 });
 
-window.addEventListener("mouseup", () => { isDraggingCompass = false; });
+// Long press for continuous increment
+let holdTimer = null;
+let holdSpeed = 0;
+
+function startHold(direction) {
+  holdSpeed = 0;
+  holdTimer = setInterval(() => {
+    holdSpeed++;
+    const step = holdSpeed > 10 ? 1.0 : 0.5;
+    windSpeed = direction === "plus"
+      ? Math.min(15, windSpeed + step)
+      : Math.max(0, windSpeed - step);
+    updateWindDisplay();
+  }, 150);
+}
+
+function stopHold() {
+  if (holdTimer) { clearInterval(holdTimer); holdTimer = null; }
+}
+
+windMinusBtn.addEventListener("mousedown", () => startHold("minus"));
+windMinusBtn.addEventListener("touchstart", (e) => { e.preventDefault(); startHold("minus"); });
+windPlusBtn.addEventListener("mousedown", () => startHold("plus"));
+windPlusBtn.addEventListener("touchstart", (e) => { e.preventDefault(); startHold("plus"); });
+window.addEventListener("mouseup", stopHold);
+window.addEventListener("touchend", stopHold);
+
+// ── Wind direction buttons ──
+const dirButtons = document.querySelectorAll(".dir-btn[data-angle]");
+dirButtons.forEach((btn) => {
+  if (btn.style.visibility === "hidden") return;
+  btn.addEventListener("click", () => {
+    dirButtons.forEach((b) => b.classList.remove("selected"));
+    btn.classList.add("selected");
+    windAngle = parseInt(btn.dataset.angle);
+    recalculate();
+  });
+});
+// Default select headwind
+document.querySelector('.dir-btn[data-angle="0"]:not([style])')?.classList.add("selected");
+
+// ── Elevation & Distance buttons ──
+document.querySelectorAll(".adv-btn[data-elev]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".adv-btn[data-elev]").forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    elevationPercent = parseInt(btn.dataset.elev);
+    elevationHidden.value = elevationPercent;
+    recalculate();
+  });
+});
+
+document.querySelectorAll(".adv-btn[data-dist]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".adv-btn[data-dist]").forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    distancePercent = parseInt(btn.dataset.dist);
+    distanceHidden.value = distancePercent;
+    recalculate();
+  });
+});
 
 // ── Ring target visualization ──
 function drawRingTarget(rings, adjustAngle) {
   const ctx = ringCanvas.getContext("2d");
-  const cx = 140, cy = 140;
-  ctx.clearRect(0, 0, 280, 280);
+  const cx = 100, cy = 100;
+  ctx.clearRect(0, 0, 200, 200);
 
   const ringDefs = [
-    { radius: 120, color: "#44cc44", name: "green" },
-    { radius: 96, color: "#ffffff", name: "white" },
-    { radius: 72, color: "#4488ff", name: "blue" },
-    { radius: 48, color: "#ff8c00", name: "orange" },
-    { radius: 24, color: "#ffd700", name: "yellow" },
+    { radius: 90, color: "#44cc44" },
+    { radius: 72, color: "#ffffff" },
+    { radius: 54, color: "#4488ff" },
+    { radius: 36, color: "#ff8c00" },
+    { radius: 18, color: "#ffd700" },
   ];
 
-  // Draw rings
   ringDefs.forEach((ring) => {
     ctx.beginPath();
     ctx.arc(cx, cy, ring.radius, 0, Math.PI * 2);
     ctx.strokeStyle = ring.color;
     ctx.lineWidth = 2;
-    ctx.globalAlpha = 0.4;
+    ctx.globalAlpha = 0.35;
     ctx.stroke();
     ctx.globalAlpha = 1;
   });
 
-  // Bullseye dot
+  // Bullseye
   ctx.beginPath();
-  ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+  ctx.arc(cx, cy, 3, 0, Math.PI * 2);
   ctx.fillStyle = "#ff4444";
   ctx.fill();
 
-  // Adjustment indicator
   if (rings > 0.1) {
     const angleRad = ((adjustAngle - 90) * Math.PI) / 180;
-    const pixelsPerRing = 24;
-    const dist = Math.min(rings * pixelsPerRing, 120);
+    const pixelsPerRing = 18;
+    const dist = Math.min(rings * pixelsPerRing, 90);
     const tx = cx + Math.cos(angleRad) * dist;
     const ty = cy + Math.sin(angleRad) * dist;
 
-    // Line from center to target
     ctx.beginPath();
-    ctx.setLineDash([4, 4]);
+    ctx.setLineDash([3, 3]);
     ctx.moveTo(cx, cy);
     ctx.lineTo(tx, ty);
     ctx.strokeStyle = "#00d4aa";
@@ -231,28 +245,43 @@ function drawRingTarget(rings, adjustAngle) {
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // Target crosshair
     ctx.beginPath();
-    ctx.arc(tx, ty, 8, 0, Math.PI * 2);
+    ctx.arc(tx, ty, 7, 0, Math.PI * 2);
     ctx.strokeStyle = "#00d4aa";
     ctx.lineWidth = 2;
     ctx.stroke();
 
     ctx.beginPath();
-    ctx.moveTo(tx - 12, ty);
-    ctx.lineTo(tx + 12, ty);
-    ctx.moveTo(tx, ty - 12);
-    ctx.lineTo(tx, ty + 12);
+    ctx.moveTo(tx - 10, ty);
+    ctx.lineTo(tx + 10, ty);
+    ctx.moveTo(tx, ty - 10);
+    ctx.lineTo(tx, ty + 10);
     ctx.strokeStyle = "#00d4aa";
-    ctx.lineWidth = 1;
+    ctx.lineWidth = 1.5;
     ctx.stroke();
-
-    // "AIM HERE" label
-    ctx.fillStyle = "#00d4aa";
-    ctx.font = "bold 10px sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText("AIM HERE", tx, ty - 16);
   }
+}
+
+// ── Friendly direction names ──
+function getDirectionName(angle) {
+  const dirs = [
+    [0, "opposite the wind (away from you)"],
+    [45, "down and to the left"],
+    [90, "to the left"],
+    [135, "up and to the left"],
+    [180, "toward the wind (toward you)"],
+    [225, "up and to the right"],
+    [270, "to the right"],
+    [315, "down and to the right"],
+  ];
+  const adjusted = (angle + 180) % 360;
+  let best = dirs[0];
+  let bestDiff = 999;
+  for (const [a, name] of dirs) {
+    const diff = Math.abs(((adjusted - a + 180) % 360) - 180);
+    if (diff < bestDiff) { bestDiff = diff; best = [a, name]; }
+  }
+  return best[1];
 }
 
 // ── Main recalculation ──
@@ -260,9 +289,6 @@ function recalculate() {
   const clubName = clubSelect.value;
   const clubLevel = parseInt(levelSelect.value);
   const ballName = ballSelect.value;
-  const windSpeed = parseFloat(windSlider.value);
-  const distancePercent = parseInt(distSlider.value);
-  const elevationPercent = parseInt(elevSlider.value);
 
   if (!clubName || !CLUBS[clubName]) return;
 
@@ -276,51 +302,40 @@ function recalculate() {
     elevationPercent,
   });
 
-  // Update ring display
+  // Big ring number
   ringNumber.textContent = result.ringsToAdjust.toFixed(1);
   ringDesc.textContent = result.ringBreakdown.description;
 
-  // Color the ring number
   const colorMap = {
-    yellow: "#ffd700",
-    orange: "#ff8c00",
-    blue: "#4488ff",
-    white: "#ffffff",
-    green: "#44cc44",
-    beyond: "#ff4444",
-    center: "#00d4aa",
+    yellow: "#ffd700", orange: "#ff8c00", blue: "#4488ff",
+    white: "#ffffff", green: "#44cc44", beyond: "#ff4444", center: "#00d4aa",
   };
   ringNumber.style.color = colorMap[result.ringBreakdown.color] || "#00d4aa";
 
-  // Draw ring target
+  // Ring visualization
   drawRingTarget(result.ringsToAdjust, result.adjustmentAngle);
 
-  // Update details
-  effectiveWindEl.textContent = `${result.effectiveWind} mph`;
-  windPerRingEl.textContent = result.windPerRing.toFixed(2);
-  clubAccuracyEl.textContent = result.clubAccuracy;
-  distMultEl.textContent = `${result.distanceMultiplier.toFixed(2)}x`;
+  // Plain English instruction
+  const dirName = getDirectionName(result.adjustmentAngle);
+  directionText.textContent = dirName;
+  ringsText.textContent = `${result.ringsToAdjust.toFixed(1)} rings`;
 
-  if (result.recommendedCurl > 0) {
-    curlRecEl.textContent = `${result.recommendedCurl}% ${result.curlDirection}`;
-    curlRecEl.style.color = "#ffd700";
-  } else {
-    curlRecEl.textContent = "None needed";
-    curlRecEl.style.color = "";
+  if (result.ringsToAdjust < 0.3) {
+    answerInstruction.innerHTML = "Wind is very light — <strong>aim right at your target!</strong>";
   }
 
-  const dirLabels = [
-    "N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
-    "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW",
-  ];
-  const dirIdx = Math.round(result.adjustmentAngle / 22.5) % 16;
-  adjustDirEl.textContent = `${dirLabels[dirIdx]} (${result.adjustmentAngle}°)`;
+  // Curl recommendation
+  if (result.recommendedCurl > 0) {
+    answerCurl.hidden = false;
+    const curlDir = result.curlDirection === "left" ? "left" : "right";
+    curlText.textContent = `Add a little curl to the ${curlDir} to fight the crosswind`;
+  } else {
+    answerCurl.hidden = true;
+  }
 
-  // Update wind chart
-  chartClubName.textContent = `— ${clubName} Lv${clubLevel}`;
+  // Wind chart
   const chart = generateWindChart(clubName, clubLevel, ballName);
   windChartEl.innerHTML = "";
-
   chart.forEach((entry) => {
     const div = document.createElement("div");
     const ringColor =
@@ -330,46 +345,49 @@ function recalculate() {
       entry.rings <= 3 ? "blue" :
       entry.rings <= 4 ? "white" :
       entry.rings <= 5 ? "green" : "beyond";
-
     div.className = `wind-chart-item ring-${ringColor}`;
-    div.innerHTML = `
-      <div class="wc-wind">${entry.wind} mph</div>
-      <div class="wc-rings">${entry.rings.toFixed(1)}</div>
-    `;
+    div.innerHTML = `<div class="wc-wind">${entry.wind} mph</div><div class="wc-rings">${entry.rings.toFixed(1)}</div>`;
     windChartEl.appendChild(div);
   });
+
+  // Save preferences
+  savePreferences();
+}
+
+// ── Persistence (remember his selections) ──
+function savePreferences() {
+  try {
+    localStorage.setItem("gc-prefs", JSON.stringify({
+      club: clubSelect.value,
+      level: levelSelect.value,
+      ball: ballSelect.value,
+      wind: windSpeed,
+    }));
+  } catch (e) { /* ignore */ }
+}
+
+function loadPreferences() {
+  try {
+    const saved = JSON.parse(localStorage.getItem("gc-prefs"));
+    if (!saved) return;
+    if (saved.club && CLUBS[saved.club]) {
+      clubSelect.value = saved.club;
+      updateLevelList();
+      if (saved.level) levelSelect.value = saved.level;
+    }
+    if (saved.ball) ballSelect.value = saved.ball;
+    if (saved.wind !== undefined) {
+      windSpeed = saved.wind;
+      updateWindDisplay();
+    }
+  } catch (e) { /* ignore */ }
 }
 
 // ── Event listeners ──
-categorySelect.addEventListener("change", updateClubList);
+categorySelect.addEventListener("change", updateClubListByCategory);
 clubSelect.addEventListener("change", updateLevelList);
 levelSelect.addEventListener("change", recalculate);
 ballSelect.addEventListener("change", recalculate);
-
-windSlider.addEventListener("input", () => {
-  windNum.value = windSlider.value;
-  recalculate();
-});
-windNum.addEventListener("input", () => {
-  windSlider.value = windNum.value;
-  recalculate();
-});
-
-distSlider.addEventListener("input", () => {
-  const v = distSlider.value;
-  distLabel.textContent =
-    v <= 25 ? `${v}% (Min)` :
-    v <= 75 ? `${v}% (Mid)` : `${v}% (Max)`;
-  recalculate();
-});
-
-elevSlider.addEventListener("input", () => {
-  const v = parseInt(elevSlider.value);
-  elevLabel.textContent =
-    v < 0 ? `${v}% (Uphill)` :
-    v > 0 ? `+${v}% (Downhill)` : "0% (Level)";
-  recalculate();
-});
 
 // ── Screenshot OCR ──
 const dropZone = document.getElementById("drop-zone");
@@ -377,137 +395,92 @@ const fileInput = document.getElementById("file-input");
 const previewImg = document.getElementById("preview-img");
 const ocrStatus = document.getElementById("ocr-status");
 const ocrDetections = document.getElementById("ocr-detections");
-const ocrDebug = document.getElementById("ocr-debug");
 const applyOcrBtn = document.getElementById("apply-ocr-btn");
 
 let lastOcrResult = null;
 
-// Click to upload
 dropZone.addEventListener("click", () => fileInput.click());
-
-// File input change
 fileInput.addEventListener("change", (e) => {
   if (e.target.files.length) handleImage(e.target.files[0]);
 });
 
-// Drag and drop
-dropZone.addEventListener("dragover", (e) => {
-  e.preventDefault();
-  dropZone.classList.add("dragover");
-});
-dropZone.addEventListener("dragleave", () => {
-  dropZone.classList.remove("dragover");
-});
+dropZone.addEventListener("dragover", (e) => { e.preventDefault(); dropZone.classList.add("dragover"); });
+dropZone.addEventListener("dragleave", () => { dropZone.classList.remove("dragover"); });
 dropZone.addEventListener("drop", (e) => {
   e.preventDefault();
   dropZone.classList.remove("dragover");
   if (e.dataTransfer.files.length) handleImage(e.dataTransfer.files[0]);
 });
 
-// Paste from clipboard
 document.addEventListener("paste", (e) => {
   const items = e.clipboardData?.items;
   if (!items) return;
   for (const item of items) {
-    if (item.type.startsWith("image/")) {
-      handleImage(item.getAsFile());
-      break;
-    }
+    if (item.type.startsWith("image/")) { handleImage(item.getAsFile()); break; }
   }
 });
 
 async function handleImage(file) {
-  // Show preview
   const url = URL.createObjectURL(file);
   previewImg.src = url;
   previewImg.hidden = false;
   dropZone.querySelector(".drop-zone-content").hidden = true;
 
-  // Run OCR
-  ocrStatus.textContent = "Analyzing screenshot...";
+  ocrStatus.textContent = "Reading your screenshot...";
   ocrStatus.className = "ocr-status processing";
   ocrDetections.hidden = true;
-  ocrDebug.hidden = true;
 
   try {
     const result = await processScreenshot(file);
     lastOcrResult = result;
 
-    // Show detections
-    const windSpeedEl = document.getElementById("ocr-wind-speed");
-    const windDirEl = document.getElementById("ocr-wind-dir");
-    const clubEl = document.getElementById("ocr-club");
-    const levelEl = document.getElementById("ocr-level");
+    document.getElementById("ocr-wind-speed").textContent =
+      result.windSpeed !== null ? `${result.windSpeed} mph` : "Couldn't read";
+    document.getElementById("ocr-club").textContent =
+      result.clubName || "Couldn't read";
 
-    windSpeedEl.textContent = result.windSpeed !== null ? `${result.windSpeed} mph` : "Not detected";
-    windSpeedEl.className = `ocr-value ${result.windSpeed !== null ? "detected" : "missed"}`;
-
-    windDirEl.textContent = result.windDirection !== null ? `${result.windDirection}°` : "Not detected";
-    windDirEl.className = `ocr-value ${result.windDirection !== null ? "detected" : "missed"}`;
-
-    clubEl.textContent = result.clubName || "Not detected";
-    clubEl.className = `ocr-value ${result.clubName ? "detected" : "missed"}`;
-
-    levelEl.textContent = result.clubLevel !== null ? `Level ${result.clubLevel}` : "Not detected";
-    levelEl.className = `ocr-value ${result.clubLevel !== null ? "detected" : "missed"}`;
-
-    ocrStatus.textContent = "Screenshot analyzed — review and apply";
+    ocrStatus.textContent = "Here's what we found:";
     ocrStatus.className = "ocr-status";
     ocrDetections.hidden = false;
-
-    // Debug info
-    const debugText = document.getElementById("ocr-debug-text");
-    debugText.textContent = `Wind region: "${result.debug.windText}"\nClub region: "${result.debug.clubText}"`;
-    document.getElementById("ocr-crop-wind").src = result.debug.windCropUrl;
-    document.getElementById("ocr-crop-club").src = result.debug.clubCropUrl;
-    ocrDebug.hidden = false;
-
   } catch (err) {
-    ocrStatus.textContent = `OCR error: ${err.message}`;
+    ocrStatus.textContent = "Sorry, couldn't read that screenshot. Try entering the values manually.";
     ocrStatus.className = "ocr-status error";
   }
 }
 
-// Apply OCR results to calculator
 applyOcrBtn.addEventListener("click", () => {
   if (!lastOcrResult) return;
+  const { windSpeed: ws, windDirection, clubName, clubLevel } = lastOcrResult;
 
-  const { windSpeed, windDirection, clubName, clubLevel } = lastOcrResult;
-
-  // Apply wind speed
-  if (windSpeed !== null) {
-    windSlider.value = windSpeed;
-    windNum.value = windSpeed;
+  if (ws !== null) {
+    windSpeed = ws;
+    updateWindDisplay();
   }
-
-  // Apply wind direction
   if (windDirection !== null) {
     windAngle = windDirection;
-    drawCompass();
-    windAngleLabel.textContent = `${windAngle}° (${getWindLabel(windAngle)})`;
+    // Find closest direction button
+    let bestBtn = null, bestDiff = 999;
+    dirButtons.forEach((btn) => {
+      if (btn.style.visibility === "hidden") return;
+      const diff = Math.abs(parseInt(btn.dataset.angle) - windAngle);
+      if (diff < bestDiff) { bestDiff = diff; bestBtn = btn; }
+    });
+    if (bestBtn) {
+      dirButtons.forEach((b) => b.classList.remove("selected"));
+      bestBtn.classList.add("selected");
+    }
   }
-
-  // Apply club
   if (clubName && CLUBS[clubName]) {
-    const club = CLUBS[clubName];
-    categorySelect.value = club.category;
-    updateClubList();
     clubSelect.value = clubName;
     updateLevelList();
-
-    // Apply level
-    if (clubLevel !== null && clubLevel >= 1 && clubLevel <= club.accuracy.length) {
-      levelSelect.value = clubLevel;
-    }
+    if (clubLevel !== null) levelSelect.value = clubLevel;
   }
 
   recalculate();
-
-  // Visual feedback
-  applyOcrBtn.textContent = "Applied!";
-  setTimeout(() => { applyOcrBtn.textContent = "Apply to Calculator"; }, 1500);
+  applyOcrBtn.textContent = "Done!";
+  setTimeout(() => { applyOcrBtn.textContent = "Use These Values"; }, 1500);
 });
 
 // ── Boot ──
-initDropdowns();
-drawCompass();
+init();
+recalculate();
