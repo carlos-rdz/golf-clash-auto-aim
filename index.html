@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Golf Clash Auto-Aim Calculator</title>
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <div id="app">
+    <header>
+      <h1>Golf Clash Auto-Aim</h1>
+      <p class="subtitle">Perfect shot calculator — zero manual math</p>
+    </header>
+
+    <!-- Screenshot Upload Section -->
+    <div class="panel screenshot-panel">
+      <div class="screenshot-row">
+        <div class="drop-zone" id="drop-zone">
+          <div class="drop-zone-content">
+            <div class="drop-icon">📷</div>
+            <div class="drop-text">Drop screenshot here, paste (Ctrl+V), or click to upload</div>
+            <input type="file" id="file-input" accept="image/*" hidden />
+          </div>
+          <img id="preview-img" class="preview-img" hidden />
+        </div>
+        <div class="ocr-results" id="ocr-results">
+          <div class="ocr-status" id="ocr-status">Upload a screenshot to auto-detect shot parameters</div>
+          <div class="ocr-detections" id="ocr-detections" hidden>
+            <div class="ocr-item">
+              <span class="ocr-label">Wind Speed</span>
+              <span class="ocr-value" id="ocr-wind-speed">—</span>
+            </div>
+            <div class="ocr-item">
+              <span class="ocr-label">Wind Direction</span>
+              <span class="ocr-value" id="ocr-wind-dir">—</span>
+            </div>
+            <div class="ocr-item">
+              <span class="ocr-label">Club</span>
+              <span class="ocr-value" id="ocr-club">—</span>
+            </div>
+            <div class="ocr-item">
+              <span class="ocr-label">Level</span>
+              <span class="ocr-value" id="ocr-level">—</span>
+            </div>
+            <button class="apply-btn" id="apply-ocr-btn">Apply to Calculator</button>
+          </div>
+          <div class="ocr-debug" id="ocr-debug" hidden>
+            <details>
+              <summary>Debug: OCR raw text</summary>
+              <pre id="ocr-debug-text"></pre>
+              <div class="ocr-crops">
+                <img id="ocr-crop-wind" class="ocr-crop" />
+                <img id="ocr-crop-club" class="ocr-crop" />
+              </div>
+            </details>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="layout">
+      <!-- LEFT: Inputs -->
+      <div class="panel inputs-panel">
+        <h2>Shot Setup</h2>
+
+        <div class="input-group">
+          <label for="club-category">Club Type</label>
+          <select id="club-category"></select>
+        </div>
+
+        <div class="input-group">
+          <label for="club-name">Club</label>
+          <select id="club-name"></select>
+        </div>
+
+        <div class="input-group">
+          <label for="club-level">Level</label>
+          <select id="club-level"></select>
+        </div>
+
+        <div class="input-group">
+          <label for="ball">Ball</label>
+          <select id="ball"></select>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="input-group">
+          <label for="wind-speed">Wind Speed (mph)</label>
+          <div class="range-row">
+            <input type="range" id="wind-speed" min="0" max="15" step="0.1" value="5" />
+            <input type="number" id="wind-speed-num" min="0" max="15" step="0.1" value="5" class="num-input" />
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label>Wind Direction</label>
+          <div class="wind-compass" id="wind-compass">
+            <canvas id="compass-canvas" width="140" height="140"></canvas>
+            <span class="wind-angle-label" id="wind-angle-label">0° (Headwind)</span>
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label for="distance">Shot Distance</label>
+          <div class="range-row">
+            <span class="range-label">Min</span>
+            <input type="range" id="distance" min="0" max="100" step="5" value="100" />
+            <span class="range-label">Max</span>
+          </div>
+          <span class="range-value" id="distance-label">100% (Max)</span>
+        </div>
+
+        <div class="input-group">
+          <label for="elevation">Elevation</label>
+          <div class="range-row">
+            <span class="range-label">Uphill</span>
+            <input type="range" id="elevation" min="-30" max="30" step="5" value="0" />
+            <span class="range-label">Downhill</span>
+          </div>
+          <span class="range-value" id="elevation-label">0% (Level)</span>
+        </div>
+      </div>
+
+      <!-- RIGHT: Results -->
+      <div class="panel results-panel">
+        <h2>Perfect Shot</h2>
+
+        <!-- Ring target visualization -->
+        <div class="ring-display">
+          <canvas id="ring-canvas" width="280" height="280"></canvas>
+          <div class="ring-readout">
+            <span class="ring-number" id="ring-number">0.0</span>
+            <span class="ring-unit">rings</span>
+          </div>
+        </div>
+
+        <div class="result-detail" id="ring-description">
+          Set up your shot above
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Shot details -->
+        <div class="details-grid">
+          <div class="detail-item">
+            <span class="detail-label">Effective Wind</span>
+            <span class="detail-value" id="effective-wind">—</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Wind/Ring</span>
+            <span class="detail-value" id="wind-per-ring">—</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Club Accuracy</span>
+            <span class="detail-value" id="club-accuracy">—</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Recommended Curl</span>
+            <span class="detail-value" id="curl-rec">—</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Adjust Direction</span>
+            <span class="detail-value" id="adjust-direction">—</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Distance Mult</span>
+            <span class="detail-value" id="dist-mult">—</span>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Quick wind chart -->
+        <h3>Quick Wind Chart <span class="chart-subtitle" id="chart-club-name"></span></h3>
+        <div class="wind-chart" id="wind-chart"></div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
