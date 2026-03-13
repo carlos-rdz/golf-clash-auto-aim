@@ -19,6 +19,8 @@ const ringsText = document.getElementById("rings-text");
 const answerCurl = document.getElementById("answer-curl");
 const curlText = document.getElementById("curl-text");
 const windChartEl = document.getElementById("wind-chart");
+const stickyRings = document.getElementById("sticky-rings");
+const stickyDirection = document.getElementById("sticky-direction");
 
 // Hidden compatibility elements
 const windSpeedHidden = document.getElementById("wind-speed");
@@ -319,6 +321,11 @@ function recalculate() {
   const dirName = getDirectionName(result.adjustmentAngle);
   directionText.textContent = dirName;
   ringsText.textContent = `${result.ringsToAdjust.toFixed(1)} rings`;
+
+  // Sticky bar
+  stickyRings.textContent = result.ringsToAdjust.toFixed(1);
+  stickyRings.style.color = colorMap[result.ringBreakdown.color] || "#00d4aa";
+  stickyDirection.textContent = dirName;
 
   if (result.ringsToAdjust < 0.3) {
     answerInstruction.innerHTML = "Wind is very light — <strong>aim right at your target!</strong>";

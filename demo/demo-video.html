@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Golf Clash Shot Calculator — Demo</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #000;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      overflow: hidden;
+      height: 100vh;
+    }
+
+    /* Title bar */
+    .demo-title {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 1000;
+      background: rgba(0,0,0,0.92);
+      backdrop-filter: blur(12px);
+      padding: 10px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-bottom: 2px solid #00d4aa;
+    }
+
+    .demo-title h1 {
+      font-size: 18px;
+      font-weight: 700;
+      color: #e8edf2;
+      letter-spacing: 1px;
+    }
+
+    .demo-title h1 span { color: #00d4aa; }
+
+    /* Split layout */
+    .demo-container {
+      display: flex;
+      height: 100vh;
+      padding-top: 48px; /* title bar height */
+    }
+
+    /* LEFT: Game footage */
+    .game-side {
+      flex: 1;
+      position: relative;
+      background: #111;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .side-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 3px;
+      color: rgba(255,255,255,0.35);
+      padding: 8px 16px;
+      text-align: center;
+    }
+
+    .video-wrap {
+      flex: 1;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #000;
+    }
+
+    .video-wrap iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+
+    /* Scene callout overlay */
+    .scene-callout {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 212, 170, 0.9);
+      color: #000;
+      font-size: 15px;
+      font-weight: 800;
+      padding: 8px 24px;
+      border-radius: 8px;
+      opacity: 0;
+      transition: opacity 0.4s;
+      pointer-events: none;
+      white-space: nowrap;
+      z-index: 10;
+    }
+
+    .scene-callout.visible { opacity: 1; }
+
+    /* Green divider */
+    .divider {
+      width: 3px;
+      background: #00d4aa;
+      box-shadow: 0 0 12px rgba(0, 212, 170, 0.4);
+    }
+
+    /* RIGHT: Calculator */
+    .calc-side {
+      flex: 1;
+      position: relative;
+      background: #0f1923;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .calc-side iframe {
+      flex: 1;
+      width: 100%;
+      border: none;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="demo-title">
+    <h1>Golf Clash <span>Shot Calculator</span> — See It In Action</h1>
+  </div>
+
+  <div class="demo-container">
+    <!-- LEFT: Real Golf Clash gameplay -->
+    <div class="game-side">
+      <div class="side-label">Golf Clash Gameplay</div>
+      <div class="video-wrap">
+        <iframe
+          id="yt-player"
+          src="https://www.youtube.com/embed/PaLJ8EZ3iY8?enablejsapi=1&mute=1&controls=0&modestbranding=1&rel=0&playsinline=1"
+          allow="autoplay; encrypted-media"
+          allowfullscreen
+        ></iframe>
+        <div class="scene-callout" id="scene-callout"></div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- RIGHT: Our calculator -->
+    <div class="calc-side">
+      <div class="side-label">Shot Calculator</div>
+      <iframe id="calc-frame" src="about:blank"></iframe>
+    </div>
+  </div>
+
+  <script>
+    // Expose API for Playwright to drive the demo
+    window.demoAPI = {
+      showCallout(text, durationMs = 3000) {
+        const el = document.getElementById("scene-callout");
+        el.textContent = text;
+        el.classList.add("visible");
+        setTimeout(() => el.classList.remove("visible"), durationMs);
+      },
+
+      loadCalculator(url) {
+        document.getElementById("calc-frame").src = url;
+      },
+
+      // Load a different YouTube video
+      setVideo(videoId, startTime = 0) {
+        const iframe = document.getElementById("yt-player");
+        iframe.src = `https://www.youtube.com/embed/${videoId}?enablejsapi=1&mute=1&controls=0&modestbranding=1&rel=0&playsinline=1&autoplay=1&start=${startTime}`;
+      },
+    };
+  </script>
+
+</body>
+</html>

@@ -61,6 +61,50 @@ body {
 }
 
 /* ══════════════════════════════════
+   STICKY RESULT BAR
+   ══════════════════════════════════ */
+
+.sticky-result {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: linear-gradient(135deg, #1a2736 0%, #162230 100%);
+  border: 1px solid var(--accent-dark);
+  border-radius: 14px;
+  padding: 10px 20px;
+  margin-bottom: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.sticky-rings {
+  font-size: 36px;
+  font-weight: 900;
+  color: var(--accent);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.sticky-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-right: auto;
+}
+
+.sticky-dir {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  text-align: right;
+  max-width: 50%;
+}
+
+/* ══════════════════════════════════
    PANELS
    ══════════════════════════════════ */
 
